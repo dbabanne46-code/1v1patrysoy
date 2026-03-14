@@ -2,204 +2,364 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>1V1 PRO FPS - VANDAL EDITION</title>
+    <title>ASCENT-LITE // PRO COMPETITIVE</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial Black', sans-serif; }
-        #hud { position: absolute; top: 20px; left: 20px; color: #00f2ff; pointer-events: none; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid #0f0; transform: translate(-50%, -50%); border-radius: 50%; }
-        #health-ui { position: absolute; bottom: 30px; left: 30px; width: 250px; height: 25px; background: rgba(0,0,0,0.8); border: 2px solid #fff; }
-        #health-bar { width: 100%; height: 100%; background: #ff4655; transition: 0.2s; }
-        #hit-effect { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 10px solid red; display: none; pointer-events: none; box-sizing: border-box; }
-        #kill-msg { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); color: #ff4655; font-size: 32px; display: none; }
+        :root { --vandal: #ff4655; --accent: #00f2ff; --glass: rgba(15, 15, 25, 0.85); }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Rajdhani', sans-serif; color: white; user-select: none; }
+        
+        /* Glassmorphic HUD */
+        #ui-root { position: absolute; inset: 0; pointer-events: none; }
+        
+        /* Valorant Style Health Bar */
+        .health-wrapper { position: absolute; bottom: 40px; left: 40px; width: 300px; }
+        .hp-label { font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--accent); }
+        .hp-bg { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px); }
+        #hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, var(--vandal), #ff858d); transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* Crosshair */
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; }
+        .ch-dot { position: absolute; top: 9px; left: 9px; width: 2px; height: 2px; background: #0f0; border-radius: 50%; }
+
+        /* Killfeed */
+        #killfeed { position: absolute; top: 30px; right: 30px; width: 250px; display: flex; flex-direction: column; gap: 8px; }
+        .kill-item { background: var(--glass); padding: 8px 15px; border-right: 4px solid var(--vandal); font-weight: bold; animation: slideIn 0.3s ease-out; }
+
+        /* Damage Overlay */
+        #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 150px rgba(255, 70, 85, 0); transition: box-shadow 0.3s; }
+        
+        /* Match Info */
+        .top-center { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: var(--glass); padding: 10px 40px; border-bottom: 2px solid var(--accent); font-family: 'Orbitron'; font-size: 24px; }
+
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        #debug { position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 12px; color: #0f0; }
     </style>
 </head>
 <body>
-    <div id="hud">
-        <div id="ping">BAĞLANIYOR...</div>
-        <div id="status">DURUM: AKTİF</div>
+
+    <div id="vignette"></div>
+    <div id="ui-root">
+        <div id="debug">PING: 0ms | FPS: 0</div>
+        <div class="top-center">12 - 11</div>
+        
+        <div id="killfeed"></div>
+
+        <div id="crosshair">
+            <div class="ch-dot"></div>
+        </div>
+
+        <div class="health-wrapper">
+            <div class="hp-label">HP // 100</div>
+            <div class="hp-bg"><div id="hp-fill"></div></div>
+        </div>
     </div>
-    <div id="crosshair"></div>
-    <div id="hit-effect"></div>
-    <div id="kill-msg">DÜŞMAN ETKİSİZ HALE GETİRİLDİ</div>
-    <div id="health-ui"><div id="health-bar"></div></div>
 
     <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        // RENDER LİNKİNİ BURAYA DİREKT GÖMDÜM
-        const socket = io('https://onev1patrysoy.onrender.com');
-        let myId, health = 100, weapon;
-        let enemies = {};
+        // --- ENGINE CONFIG ---
+        const CONFIG = {
+            SENSITIVITY: 0.0022,
+            VANDAL_PATTERN: [
+                {x: 0, y: 0.02}, {x: 0, y: 0.04}, {x: 0.01, y: 0.06}, 
+                {x: -0.02, y: 0.07}, {x: 0.02, y: 0.08}
+            ],
+            TICK_RATE: 64,
+            RENDER_URL: 'https://onev1patrysoy.onrender.com'
+        };
 
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050510);
-        
-        // Kamera: 'Near' değerini 0.01 yaptım ki silah burnumuzun dibinde gözüksün
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
+        class GameEngine {
+            constructor() {
+                this.initGraphics();
+                this.initNetworking();
+                this.initPlayer();
+                this.initSystems();
+                this.animate();
+            }
 
-        // --- IŞIKLANDIRMA (MAX SEVİYE) ---
-        const ambient = new THREE.AmbientLight(0xffffff, 2.0); // Ortamı bembeyaz yapar
-        scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 2.5); // Güneş etkisi
-        sun.position.set(5, 15, 5);
-        scene.add(sun);
+            initGraphics() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x020205);
+                this.scene.fog = new THREE.Fog(0x020205, 5, 45);
 
-        // Zemin: Parlak ve Izgaralı
-        const grid = new THREE.GridHelper(100, 50, 0x00f2ff, 0x444444);
-        scene.add(grid);
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
+                this.camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.01, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                document.body.appendChild(this.renderer.domElement);
 
-        // --- SİLAH (VANDAL) TASARIMI ---
-        function buildVandal() {
-            weapon = new THREE.Group();
-            
-            // Kasa (Gövde)
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }));
-            weapon.add(body);
+                // Lighting
+                const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambient);
 
-            // Namlu (Uzun)
-            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4), new THREE.MeshStandardMaterial({ color: 0x000000 }));
-            barrel.rotation.x = Math.PI/2;
-            barrel.position.z = -0.4;
-            weapon.add(barrel);
+                const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+                sun.position.set(5, 10, 7);
+                this.scene.add(sun);
 
-            // Şarjör
-            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.12), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-            mag.position.set(0, -0.15, -0.1);
-            mag.rotation.x = 0.3;
-            weapon.add(mag);
+                // Environment
+                const grid = new THREE.GridHelper(100, 50, 0x00f2ff, 0x111111);
+                this.scene.add(grid);
+                
+                const floorGeo = new THREE.PlaneGeometry(200, 200);
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.2 });
+                const floor = new THREE.Mesh(floorGeo, floorMat);
+                floor.rotation.x = -Math.PI / 2;
+                this.scene.add(floor);
+            }
 
-            // Nişangah (Parlak Detay)
-            const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, 0.05), new THREE.MeshStandardMaterial({ color: 0x00f2ff, emissive: 0x00f2ff }));
-            sight.position.set(0, 0.08, -0.2);
-            weapon.add(sight);
+            initPlayer() {
+                this.player = {
+                    pos: new THREE.Vector3(0, 1.7, 5),
+                    rot: { y: 0, p: 0 },
+                    vel: new THREE.Vector3(),
+                    health: 100,
+                    keys: {},
+                    recoil: { pitch: 0, yaw: 0 },
+                    isSprinting: false,
+                    lastShot: 0
+                };
 
-            // Silahı Kameraya Bağla
-            weapon.position.set(0.25, -0.2, -0.35); // Kameranın tam önü
-            camera.add(weapon);
-            scene.add(camera);
+                this.buildVandal();
+                this.setupControls();
+            }
+
+            buildVandal() {
+                this.weaponGroup = new THREE.Group();
+                
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.12, 0.18, 0.6),
+                    new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0.8 })
+                );
+                
+                const barrel = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.02, 0.02, 0.5),
+                    new THREE.MeshStandardMaterial({ color: 0x050505 })
+                );
+                barrel.rotation.x = Math.PI/2;
+                barrel.position.z = -0.45;
+
+                // Muzzle Flash Point (Ateş efekti noktası)
+                this.muzzlePoint = new THREE.Object3D();
+                this.muzzlePoint.position.z = -0.7;
+                this.weaponGroup.add(this.muzzlePoint);
+
+                this.weaponGroup.add(body, barrel);
+                this.weaponGroup.position.set(0.35, -0.3, -0.45);
+                this.camera.add(this.weaponGroup);
+                this.scene.add(this.camera);
+            }
+
+            initNetworking() {
+                this.socket = io(CONFIG.RENDER_URL);
+                this.enemies = {};
+                this.myId = null;
+
+                this.socket.on('init', (data) => {
+                    this.myId = data.id;
+                    Object.keys(data.players).forEach(id => { if(id !== this.myId) this.spawnEnemy(id); });
+                });
+
+                this.socket.on('newPlayer', (data) => this.spawnEnemy(data.id));
+                
+                this.socket.on('updatePlayer', (data) => {
+                    if (this.enemies[data.id]) {
+                        this.enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y - 1.7, data.pos.z), 0.2);
+                        this.enemies[data.id].rotation.y = data.rot.y;
+                    }
+                });
+
+                this.socket.on('playerHit', (data) => {
+                    if (data.id === this.myId) this.takeDamage(data.health);
+                });
+
+                this.socket.on('playerDead', (data) => this.handleKill(data));
+                
+                this.socket.on('removePlayer', (id) => {
+                    if (this.enemies[id]) {
+                        this.scene.remove(this.enemies[id]);
+                        delete this.enemies[id];
+                    }
+                });
+            }
+
+            spawnEnemy(id) {
+                const group = new THREE.Group();
+                const body = new THREE.Mesh(
+                    new THREE.CapsuleGeometry(0.5, 1, 4, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xff4655, emissive: 0xff4655, emissiveIntensity: 0.5 })
+                );
+                body.position.y = 1;
+                group.add(body);
+                group.userData.id = id;
+                this.scene.add(group);
+                this.enemies[id] = group;
+            }
+
+            setupControls() {
+                document.addEventListener('keydown', (e) => this.player.keys[e.code] = true);
+                document.addEventListener('keyup', (e) => this.player.keys[e.code] = false);
+                document.addEventListener('mousedown', (e) => {
+                    if (document.pointerLockElement !== document.body) {
+                        document.body.requestPointerLock();
+                    } else {
+                        this.shoot();
+                    }
+                });
+                document.addEventListener('mousemove', (e) => {
+                    if (document.pointerLockElement === document.body) {
+                        this.player.rot.y -= e.movementX * CONFIG.SENSITIVITY;
+                        this.player.rot.p -= e.movementY * CONFIG.SENSITIVITY;
+                        this.player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.player.rot.p));
+                    }
+                });
+            }
+
+            shoot() {
+                const now = Date.now();
+                if (now - this.player.lastShot < 100) return; // 600 RPM
+                this.player.lastShot = now;
+
+                // Valorant Recoil Logic
+                const pattern = CONFIG.VANDAL_PATTERN[Math.floor(Math.random() * pattern.length)] || {x:0, y:0.05};
+                this.player.recoil.pitch += 0.04;
+                this.player.recoil.yaw += (Math.random() - 0.5) * 0.02;
+
+                // Muzzle Flash
+                this.createMuzzleFlash();
+
+                // Tracer (Mermi İzi)
+                this.createTracer();
+
+                // Raycast
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+                const hits = raycaster.intersectObjects(Object.values(this.enemies), true);
+
+                if (hits.length > 0) {
+                    let obj = hits[0].object;
+                    while(obj.parent && !obj.userData.id) obj = obj.parent;
+                    if (obj.userData.id) {
+                        this.socket.emit('hit', { targetId: obj.userData.id });
+                        this.showHitmarker();
+                    }
+                }
+            }
+
+            createMuzzleFlash() {
+                const flash = new THREE.PointLight(0xffaa00, 5, 2);
+                flash.position.copy(this.muzzlePoint.getWorldPosition(new THREE.Vector3()));
+                this.scene.add(flash);
+                setTimeout(() => this.scene.remove(flash), 50);
+            }
+
+            createTracer() {
+                const start = this.muzzlePoint.getWorldPosition(new THREE.Vector3());
+                const end = new THREE.Vector3().set(0,0,-1).applyQuaternion(this.camera.quaternion).multiplyScalar(50).add(start);
+                
+                const points = [start, end];
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8 });
+                const line = new THREE.Line(geometry, material);
+                
+                this.scene.add(line);
+                let op = 0.8;
+                const fade = setInterval(() => {
+                    op -= 0.1;
+                    line.material.opacity = op;
+                    if(op <= 0) {
+                        this.scene.remove(line);
+                        clearInterval(fade);
+                    }
+                }, 20);
+            }
+
+            takeDamage(newHp) {
+                this.player.health = newHp;
+                document.getElementById('hp-fill').style.width = newHp + "%";
+                document.getElementById('vignette').style.boxShadow = "inset 0 0 100px rgba(255, 0, 0, 0.7)";
+                setTimeout(() => {
+                    document.getElementById('vignette').style.boxShadow = "inset 0 0 100px rgba(255, 0, 0, 0)";
+                }, 200);
+            }
+
+            handleKill(data) {
+                const feed = document.getElementById('killfeed');
+                const item = document.createElement('div');
+                item.className = 'kill-item';
+                item.innerHTML = `${data.killer.substring(0,5)} <span style="color:#fff">VANDAL</span> ${data.victim.substring(0,5)}`;
+                feed.prepend(item);
+                setTimeout(() => item.remove(), 4000);
+
+                if (data.victim === this.myId) {
+                    this.player.pos.set(Math.random()*10, 1.7, Math.random()*10);
+                    this.takeDamage(100);
+                }
+            }
+
+            showHitmarker() {
+                // Crosshair anlık beyaz olur
+                const ch = document.querySelector('.ch-dot');
+                ch.style.background = '#fff';
+                ch.style.transform = 'scale(2)';
+                setTimeout(() => {
+                    ch.style.background = '#0f0';
+                    ch.style.transform = 'scale(1)';
+                }, 100);
+            }
+
+            initSystems() {
+                this.clock = new THREE.Clock();
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                const dt = Math.min(this.clock.getDelta(), 0.1);
+
+                // Movement Physics
+                const p = this.player;
+                const move = new THREE.Vector3();
+                const speed = p.keys['ShiftLeft'] ? 0.18 : 0.11;
+                
+                if (p.keys['KeyW']) move.z -= speed;
+                if (p.keys['KeyS']) move.z += speed;
+                if (p.keys['KeyA']) move.x -= speed;
+                if (p.keys['KeyD']) move.x += speed;
+
+                move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot.y));
+                p.pos.add(move);
+
+                // Recoil Recovery
+                p.recoil.pitch *= 0.85;
+                p.recoil.yaw *= 0.85;
+
+                // Update Camera
+                this.camera.rotation.set(p.rot.p + p.recoil.pitch, p.rot.y + p.recoil.yaw, 0, 'YXZ');
+                this.camera.position.copy(p.pos);
+
+                // Weapon Animation (Sway/Bobbing)
+                const bob = Math.sin(Date.now() * 0.008) * 0.002;
+                this.weaponGroup.position.y = -0.3 + bob;
+                this.weaponGroup.position.x = 0.35 + Math.cos(Date.now() * 0.004) * 0.002;
+
+                if (this.myId) {
+                    this.socket.emit('move', { pos: p.pos, rot: p.rot });
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
         }
-        buildVandal();
 
-        // --- MULTIPLAYER ---
-        const player = { pos: new THREE.Vector3(0, 1.7, 5), rot: { y: 0, p: 0 }, keys: {}, recoilY: 0, recoilZ: 0 };
-
-        function createEnemy(id) {
-            const g = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: 0xff4655, emissive: 0xff0000 }));
-            body.position.y = 1;
-            g.add(body);
-            g.userData.id = id;
-            scene.add(g);
-            enemies[id] = g;
-        }
-
-        socket.on('init', (data) => {
-            myId = data.id;
-            document.getElementById('ping').innerText = "ID: " + myId;
-            Object.keys(data.players).forEach(id => { if (id !== myId) createEnemy(id); });
-        });
-
-        socket.on('newPlayer', (data) => createEnemy(data.id));
-
-        socket.on('updatePlayer', (data) => {
-            if (enemies[data.id]) {
-                enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y - 1.7, data.pos.z), 0.2);
-                enemies[data.id].rotation.y = data.rot.y;
-            }
-        });
-
-        socket.on('playerHit', (data) => {
-            if (data.id === myId) {
-                health = data.health;
-                document.getElementById('health-bar').style.width = health + "%";
-                document.getElementById('hit-effect').style.display = 'block';
-                setTimeout(() => document.getElementById('hit-effect').style.display = 'none', 100);
-            }
-        });
-
-        socket.on('playerDead', (data) => {
-            if (data.victim === myId) {
-                health = 100;
-                document.getElementById('health-bar').style.width = "100%";
-                player.pos.set(Math.random()*20-10, 1.7, Math.random()*20-10);
-            } else if (data.killer === myId) {
-                const msg = document.getElementById('kill-msg');
-                msg.style.display = 'block';
-                setTimeout(() => msg.style.display = 'none', 2000);
-            }
-        });
-
-        // --- RECOIL & ATEŞ ---
-        const raycaster = new THREE.Raycaster();
-        function shoot() {
-            // Sert Recoil (Hem kamera hem silah kalkar)
-            player.recoilY += 0.05; // Kamera yukarı seker
-            player.recoilZ = 0.1;   // Silah geriye seker
-
-            raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-            const intersects = raycaster.intersectObjects(Object.values(enemies), true);
-            if (intersects.length > 0) {
-                let obj = intersects[0].object;
-                while (obj.parent && !obj.userData.id) obj = obj.parent;
-                if (obj.userData.id) socket.emit('hit', { targetId: obj.userData.id });
-            }
-        }
-
-        // --- KONTROLLER ---
-        document.addEventListener('mousedown', () => {
-            if (document.pointerLockElement !== document.body) document.body.requestPointerLock();
-            else shoot();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === document.body) {
-                player.rot.y -= e.movementX * 0.002;
-                player.rot.p -= e.movementY * 0.002;
-                player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, player.rot.p));
-            }
-        });
-        document.addEventListener('keydown', (e) => player.keys[e.code] = true);
-        document.addEventListener('keyup', (e) => player.keys[e.code] = false);
-
-        // --- OYUN DÖNGÜSÜ ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Recoil Sönümleme (Yavaşça eski haline dönme)
-            player.recoilY *= 0.9;
-            player.recoilZ *= 0.8;
-            
-            // Kamerayı güncelle (Normal bakış + recoil)
-            camera.rotation.set(player.rot.p + player.recoilY, player.rot.y, 0, 'YXZ');
-
-            // Silah Pozisyonu (Nefes alma + Recoil sekişi)
-            weapon.position.z = -0.35 + player.recoilZ;
-            weapon.position.y = -0.2 + Math.sin(Date.now() * 0.004) * 0.003;
-
-            // Hareket
-            const move = new THREE.Vector3();
-            if (player.keys['KeyW']) move.z -= 0.12;
-            if (player.keys['KeyS']) move.z += 0.12;
-            if (player.keys['KeyA']) move.x -= 0.12;
-            if (player.keys['KeyD']) move.x += 0.12;
-            move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.rot.y));
-            player.pos.add(move);
-            camera.position.copy(player.pos);
-
-            if (myId) socket.emit('move', { pos: player.pos, rot: player.rot });
-            renderer.render(scene, camera);
-        }
-        animate();
+        const App = new GameEngine();
     </script>
 </body>
 </html>
