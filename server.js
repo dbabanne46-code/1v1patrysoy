@@ -10,11 +10,12 @@ io.on('connection', (socket) => {
     socket.on('join', (data) => {
         players[socket.id] = {
             id: socket.id,
-            name: data.name.substring(0, 12),
-            team: data.team,
+            name: (data.name || "Agent").substring(0, 12),
+            team: data.team || "RED",
             pos: { x: 0, y: 1.7, z: 0 },
             rot: { y: 0, p: 0 },
-            health: 100
+            health: 100,
+            isCrouching: false
         };
         socket.emit('init', { id: socket.id, players, scores });
         socket.broadcast.emit('newPlayer', { id: socket.id, player: players[socket.id] });
@@ -24,7 +25,8 @@ io.on('connection', (socket) => {
         if (players[socket.id]) {
             players[socket.id].pos = data.pos;
             players[socket.id].rot = data.rot;
-            socket.broadcast.emit('updatePlayer', { id: socket.id, pos: data.pos, rot: data.rot });
+            players[socket.id].isCrouching = data.isCrouching;
+            socket.broadcast.emit('updatePlayer', { id: socket.id, ...data });
         }
     });
 
@@ -32,20 +34,19 @@ io.on('connection', (socket) => {
         const targetId = data.targetId;
         const shooter = players[socket.id];
         if (players[targetId] && shooter && players[targetId].team !== shooter.team) {
-            players[targetId].health -= 34; // 3 mermide öldürür
+            const damage = data.isHeadshot ? 100 : 35;
+            players[targetId].health -= damage;
+            
             if (players[targetId].health <= 0) {
                 players[targetId].health = 100;
                 scores[shooter.team]++;
                 io.emit('playerDead', { 
-                    victim: targetId, 
-                    killer: socket.id, 
-                    victimName: players[targetId].name,
-                    killerName: shooter.name,
-                    victimTeam: players[targetId].team,
-                    scores: scores 
+                    victim: targetId, killer: socket.id, 
+                    victimName: players[targetId].name, killerName: shooter.name,
+                    victimTeam: players[targetId].team, scores, isHeadshot: data.isHeadshot 
                 });
             } else {
-                io.emit('playerHit', { id: targetId, health: players[targetId].health });
+                io.emit('playerHit', { id: targetId, health: players[targetId].health, shooterId: socket.id });
             }
         }
     });
@@ -56,5 +57,4 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+http.listen(process.env.PORT || 3000, () => console.log("Engine Backend Online"));
