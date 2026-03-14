@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>ASCENT 1V1 MULTIPLAYER</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #hud { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid #0f0; transform: translate(-50%, -50%); }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div id="ping">Ping: 0ms</div>
+        <div id="status">Bağlanılıyor...</div>
+    </div>
+    <div id="crosshair"></div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- NETWORK SETUP ---
+        // Kendi IP adresini buraya yaz (Arkadaşınla oynarken önemli!)
+        const socket = io('http://localhost:3000'); 
+        let myId = null;
+        let enemies = {};
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Işıklandırma ve Zemin
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Oyuncu Bilgileri
+        const player = {
+            pos: new THREE.Vector3(Math.random()*10, 1.7, 5),
+            rot: { y: 0, p: 0 },
+            vel: new THREE.Vector3(),
+            keys: {}
+        };
+
+        // Düşman Oluşturma Fonksiyonu
+        function createEnemy(id) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: 0xff4655 }));
+            body.position.y = 1;
+            group.add(body);
+            
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            head.position.y = 1.8;
+            group.add(head);
+
+            scene.add(group);
+            enemies[id] = group;
+        }
+
+        // --- SOCKET OLAYLARI ---
+        socket.on('init', (data) => {
+            myId = data.id;
+            document.getElementById('status').innerText = "Bağlandı (ID: " + myId + ")";
+            Object.keys(data.players).forEach(id => {
+                if (id !== myId) createEnemy(id);
+            });
+        });
+
+        socket.on('newPlayer', (data) => {
+            createEnemy(data.id);
+        });
+
+        socket.on('updatePlayer', (data) => {
+            if (enemies[data.id]) {
+                enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y - 1.7, data.pos.z), 0.2);
+                enemies[data.id].rotation.y = data.rot.y;
+            }
+        });
+
+        socket.on('removePlayer', (id) => {
+            if (enemies[id]) {
+                scene.remove(enemies[id]);
+                delete enemies[id];
+            }
+        });
+
+        // Kontroller
+        document.addEventListener('keydown', (e) => player.keys[e.code] = true);
+        document.addEventListener('keyup', (e) => player.keys[e.code] = false);
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                player.rot.y -= e.movementX * 0.002;
+                player.rot.p -= e.movementY * 0.002;
+                camera.rotation.set(player.rot.p, player.rot.y, 0, 'YXZ');
+            }
+        });
+        document.addEventListener('mousedown', () => {
+            document.body.requestPointerLock();
+            socket.emit('shoot', { time: Date.now() });
+        });
+
+        // Oyun Döngüsü
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Hareket Mantığı
+            const move = new THREE.Vector3();
+            if (player.keys['KeyW']) move.z -= 0.1;
+            if (player.keys['KeyS']) move.z += 0.1;
+            if (player.keys['KeyA']) move.x -= 0.1;
+            if (player.keys['KeyD']) move.x += 0.1;
+
+            move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.rot.y));
+            player.pos.add(move);
+            camera.position.copy(player.pos);
+
+            // Pozisyonu Sunucuya Gönder
+            if (socket.connected) {
+                socket.emit('move', {
+                    pos: { x: player.pos.x, y: player.pos.y, z: player.pos.z },
+                    rot: { y: player.rot.y, p: player.rot.p }
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
