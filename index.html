@@ -2,93 +2,77 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>ASCENT-LITE // V3.0 PRO</title>
+    <title>ASCENT-LITE // TEAM TACTICS</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        :root { --vandal: #ff4655; --accent: #00f2ff; --bg: #0f1419; }
+        :root { --vandal: #ff4655; --accent: #00f2ff; --blue: #0088ff; }
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Rajdhani', sans-serif; color: white; }
-        canvas { display: block; }
-
-        /* UI OVERLAY */
-        #hud { position: absolute; inset: 0; pointer-events: none; }
         
-        /* MODERN SCOREBOARD */
-        .match-info { 
+        /* FULLSCREEN MENU */
+        #overlay {
+            position: fixed; inset: 0; background: rgba(10, 15, 20, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; backdrop-filter: blur(10px);
+        }
+        .menu-card {
+            background: rgba(255,255,255,0.05); padding: 40px; border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1); width: 400px; text-align: center;
+        }
+        input {
+            width: 100%; padding: 12px; background: #1a2026; border: 1px solid var(--accent);
+            color: white; font-family: 'Orbitron'; margin-bottom: 20px; box-sizing: border-box;
+        }
+        .team-btns { display: flex; gap: 10px; margin-bottom: 20px; }
+        .t-btn { 
+            flex: 1; padding: 15px; border: none; cursor: pointer; font-weight: bold; 
+            font-family: 'Orbitron'; transition: 0.3s;
+        }
+        .btn-a { background: var(--vandal); color: white; }
+        .btn-b { background: var(--blue); color: white; }
+        .t-btn:hover { filter: brightness(1.2); transform: scale(1.05); }
+
+        /* HUD */
+        #hud { position: absolute; inset: 0; pointer-events: none; display: none; }
+        .score-bar { 
             position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; background: rgba(15, 20, 25, 0.9);
-            padding: 10px 40px; border-bottom: 3px solid var(--vandal);
-            font-family: 'Orbitron'; font-size: 24px; clip-path: polygon(0 0, 100% 0, 85% 100%, 15% 100%);
+            background: rgba(0,0,0,0.8); display: flex; gap: 30px; padding: 10px 40px;
+            border-bottom: 3px solid var(--accent); font-family: 'Orbitron'; font-size: 24px;
         }
-
-        /* WEAPON & AMMO */
-        .weapon-status {
-            position: absolute; bottom: 40px; right: 40px; text-align: right;
-            background: rgba(0,0,0,0.6); padding: 15px 30px; border-right: 5px solid var(--accent);
-        }
-        .ammo { font-size: 48px; font-weight: 800; line-height: 1; color: var(--accent); }
-        .weapon-name { font-size: 14px; letter-spacing: 3px; color: #aaa; }
-
-        /* HEALTH BAR (VALORANT STYLE) */
-        .health-section { position: absolute; bottom: 40px; left: 40px; width: 350px; }
-        .hp-text { font-size: 32px; font-weight: 800; margin-bottom: 5px; }
-        .hp-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.1); overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
-        #hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #00f2ff, #0088ff); transition: width 0.3s; }
-
-        /* CROSSHAIR */
-        #crosshair { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
-        }
-        .ch-line { position: absolute; background: #0f0; box-shadow: 0 0 5px #0f0; }
-        .ch-h { width: 10px; height: 2px; }
-        .ch-v { width: 2px; height: 10px; }
-
-        /* HITMARKER */
-        #hitmarker { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(45deg);
-            width: 30px; height: 30px; display: none;
-        }
-        .hm-l { position: absolute; background: white; }
-
-        /* KILL FEED */
-        #killfeed { position: absolute; top: 100px; right: 20px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
-        .kill-box { background: rgba(255, 70, 85, 0.8); padding: 8px 15px; font-weight: bold; border-left: 5px solid white; animation: slideIn 0.3s; }
+        .hp-box { position: absolute; bottom: 40px; left: 40px; width: 300px; }
+        #hp-bar { height: 10px; background: var(--accent); transition: 0.3s; }
         
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        #debug-info { position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 12px; color: var(--accent); }
+        /* KILLFEED & NAMEPLATES */
+        #killfeed { position: absolute; top: 100px; right: 20px; text-align: right; }
+        .kill-entry { background: var(--vandal); padding: 5px 15px; margin-bottom: 5px; font-weight: bold; }
+        .nameplate { position: absolute; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
     </style>
 </head>
 <body>
 
-    <div id="debug-info">FPS: 0 | PING: 0ms</div>
+    <!-- GİRİŞ MENÜSÜ -->
+    <div id="overlay">
+        <h1 style="font-family: 'Orbitron'; color: var(--accent); margin-bottom: 40px;">ASCENT // COMPETITIVE</h1>
+        <div class="menu-card">
+            <input type="text" id="nickInput" placeholder="NICKNAME GIRINIZ..." maxlength="12">
+            <div style="margin-bottom: 10px; font-weight: bold; color: #aaa;">TAKIM SEÇ</div>
+            <div class="team-btns">
+                <button class="t-btn btn-a" onclick="joinGame('A')">TEAM RED</button>
+                <button class="t-btn btn-b" onclick="joinGame('B')">TEAM BLUE</button>
+            </div>
+            <p style="font-size: 12px; color: #666;">W-A-S-D: Hareket | Mouse: Ateş | Sağ Tık: Zoom</p>
+        </div>
+    </div>
 
     <div id="hud">
-        <div class="match-info">12 <span style="margin: 0 20px; color: var(--vandal)">-</span> 11</div>
-        
+        <div class="score-bar">
+            <span style="color: var(--vandal)">RED: <span id="scoreA">0</span></span>
+            <span style="color: var(--blue)">BLUE: <span id="scoreB">0</span></span>
+        </div>
         <div id="killfeed"></div>
-
-        <div id="crosshair">
-            <div class="ch-line ch-h" style="left: -12px;"></div>
-            <div class="ch-line ch-h" style="right: -12px;"></div>
-            <div class="ch-line ch-v" style="top: -12px;"></div>
-            <div class="ch-line ch-v" style="bottom: -12px;"></div>
-        </div>
-
-        <div id="hitmarker">
-            <div class="hm-l" style="width: 2px; height: 15px; left: 14px;"></div>
-            <div class="hm-l" style="width: 15px; height: 2px; top: 14px;"></div>
-        </div>
-
-        <div class="health-section">
-            <div class="hp-text">100</div>
-            <div class="hp-bar-bg"><div id="hp-fill"></div></div>
-        </div>
-
-        <div class="weapon-status">
-            <div class="weapon-name">VANDAL // AR</div>
-            <div class="ammo">25<span style="font-size: 18px; color: #666"> / 75</span></div>
+        <div class="hp-box">
+            <div id="hp-text" style="font-size: 32px; font-weight: bold; margin-bottom: 5px;">100</div>
+            <div style="background: rgba(255,255,255,0.1);"><div id="hp-bar"></div></div>
         </div>
     </div>
 
@@ -97,343 +81,171 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- CONSTANTS ---
         const RENDER_URL = 'https://onev1patrysoy.onrender.com';
-        const GRAVITY = -30;
-        const MOUSE_SENS = 0.002;
+        const socket = io(RENDER_URL);
 
-        class Game {
-            constructor() {
-                this.initEngine();
-                this.initLights();
-                this.initLevel();
-                this.initPlayer();
-                this.initNetworking();
-                this.initCombat();
-                this.animate();
+        let myId, myTeam, myName;
+        let enemies = {};
+        let score = { A: 0, B: 0 };
+
+        // THREE.JS CORE
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050a10);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // LIGHTS
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
+        sun.position.set(5, 10, 5);
+        scene.add(sun);
+
+        // LEVEL
+        scene.add(new THREE.GridHelper(100, 50, 0x444444, 0x222222));
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        floor.rotation.x = -Math.PI/2;
+        scene.add(floor);
+
+        // MAP OBJECTS
+        const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+        for(let i=0; i<10; i++) {
+            const box = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0x333333 }));
+            box.position.set(Math.random()*40-20, 1, Math.random()*40-20);
+            scene.add(box);
+        }
+
+        const player = { pos: new THREE.Vector3(), rot: {y:0, p:0}, keys: {}, health: 100 };
+
+        // SPAWN POINTS
+        const SP_TEAM_A = { x: 30, z: 30 };
+        const SP_TEAM_B = { x: -30, z: -30 };
+
+        window.joinGame = (team) => {
+            myName = document.getElementById('nickInput').value || "Oyuncu";
+            myTeam = team;
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            
+            // Initial Spawn
+            const startPos = team === 'A' ? SP_TEAM_A : SP_TEAM_B;
+            player.pos.set(startPos.x, 1.7, startPos.z);
+            
+            socket.emit('join', { name: myName, team: myTeam });
+            requestPointerLock();
+        };
+
+        function requestPointerLock() {
+            document.body.requestPointerLock();
+        }
+
+        function createEnemy(data) {
+            const group = new THREE.Group();
+            const color = data.team === 'A' ? 0xff4655 : 0x0088ff;
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: color }));
+            body.position.y = 1;
+            group.add(body);
+            
+            // Nameplate (Basit Text Çözümü)
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Orbitron';
+            ctx.fillText(data.name, 10, 30);
+            const tex = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+            sprite.position.y = 2.2;
+            sprite.scale.set(2, 1, 1);
+            group.add(sprite);
+
+            group.userData = { id: data.id, team: data.team };
+            scene.add(group);
+            enemies[data.id] = group;
+        }
+
+        // SOCKET LOGIC
+        socket.on('init', (data) => {
+            myId = data.id;
+            Object.keys(data.players).forEach(id => {
+                if(id !== myId) createEnemy(data.players[id]);
+            });
+        });
+
+        socket.on('newPlayer', (data) => createEnemy(data.player));
+
+        socket.on('updatePlayer', (data) => {
+            if(enemies[data.id]) {
+                enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y-1.7, data.pos.z), 0.2);
+                enemies[data.id].rotation.y = data.rot.y;
             }
+        });
 
-            initEngine() {
-                this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0x0a0f14);
-                this.scene.fog = new THREE.Fog(0x0a0f14, 10, 60);
+        socket.on('playerDead', (data) => {
+            // Killfeed
+            const kf = document.getElementById('killfeed');
+            kf.innerHTML = `<div class="kill-entry">${data.killer.substring(0,4)} ⚔️ ${data.victim.substring(0,4)}</div>` + kf.innerHTML;
+            
+            // Score Update
+            if(data.victimTeam === 'A') score.B++; else score.A++;
+            document.getElementById('scoreA').innerText = score.A;
+            document.getElementById('scoreB').innerText = score.B;
 
-                this.camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.01, 1000);
-                this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-                document.body.appendChild(this.renderer.domElement);
-
-                this.clock = new THREE.Clock();
-                this.fpsDisplay = document.getElementById('debug-info');
+            if(data.victim === myId) {
+                const respawn = myTeam === 'A' ? SP_TEAM_A : SP_TEAM_B;
+                player.pos.set(respawn.x, 1.7, respawn.z);
+                player.health = 100;
+                updateHealthUI();
             }
+        });
 
-            initLights() {
-                const amb = new THREE.AmbientLight(0xffffff, 0.6);
-                this.scene.add(amb);
+        function updateHealthUI() {
+            document.getElementById('hp-text').innerText = player.health;
+            document.getElementById('hp-bar').style.width = player.health + "%";
+        }
 
-                const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-                sun.position.set(10, 20, 10);
-                sun.castShadow = true;
-                this.scene.add(sun);
-
-                // Site A/B Neon Lights
-                const blueNeon = new THREE.PointLight(0x00f2ff, 2, 20);
-                blueNeon.position.set(-15, 5, -15);
-                this.scene.add(blueNeon);
-            }
-
-            initLevel() {
-                // Ground
-                const floor = new THREE.Mesh(
-                    new THREE.PlaneGeometry(200, 200),
-                    new THREE.MeshStandardMaterial({ color: 0x1a2026, roughness: 0.8 })
-                );
-                floor.rotation.x = -Math.PI/2;
-                this.scene.add(floor);
-
-                // Grid (Subtle)
-                const grid = new THREE.GridHelper(100, 50, 0x2a3036, 0x1a2026);
-                this.scene.add(grid);
-
-                // ASCENT MAP ELEMENTS (Boxes and Walls)
-                const createBox = (w, h, d, x, z, color=0x3a4046) => {
-                    const b = new THREE.Mesh(
-                        new THREE.BoxGeometry(w, h, d),
-                        new THREE.MeshStandardMaterial({ color: color })
-                    );
-                    b.position.set(x, h/2, z);
-                    this.scene.add(b);
-                };
-
-                // Mid Boxes
-                createBox(2, 2, 2, 5, 5);
-                createBox(2, 4, 2, -5, -10);
-                createBox(4, 2, 2, 10, -5);
-                
-                // Site Walls
-                createBox(1, 4, 15, 15, 0, 0x11161b);
-                createBox(1, 4, 15, -15, 0, 0x11161b);
-            }
-
-            initPlayer() {
-                this.player = {
-                    pos: new THREE.Vector3(0, 1.7, 10),
-                    vel: new THREE.Vector3(),
-                    rot: { y: 0, p: 0 },
-                    keys: {},
-                    onGround: true,
-                    isADS: false,
-                    recoil: { p: 0, y: 0 },
-                    sway: 0
-                };
-
-                // Weapon Setup
-                this.weaponPivot = new THREE.Group();
-                this.buildVandal();
-                this.camera.add(this.weaponPivot);
-                this.scene.add(this.camera);
-
-                // Events
-                document.addEventListener('keydown', (e) => this.player.keys[e.code] = true);
-                document.addEventListener('keyup', (e) => this.player.keys[e.code] = false);
-                document.addEventListener('mousedown', (e) => {
-                    if (document.pointerLockElement !== document.body) {
-                        document.body.requestPointerLock();
-                    } else {
-                        if (e.button === 0) this.shoot();
-                        if (e.button === 2) this.toggleADS(true);
-                    }
-                });
-                document.addEventListener('mouseup', (e) => {
-                    if (e.button === 2) this.toggleADS(false);
-                });
-                document.addEventListener('mousemove', (e) => {
-                    if (document.pointerLockElement === document.body) {
-                        const sens = this.player.isADS ? MOUSE_SENS * 0.5 : MOUSE_SENS;
-                        this.player.rot.y -= e.movementX * sens;
-                        this.player.rot.p -= e.movementY * sens;
-                        this.player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.player.rot.p));
-                    }
-                });
-            }
-
-            buildVandal() {
-                // Vandal Body
-                const body = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.1, 0.15, 0.6),
-                    new THREE.MeshPhysicalMaterial({ color: 0x1a1a1a, metalness: 0.9, roughness: 0.2 })
-                );
-                
-                // Barrel
-                const barrel = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.015, 0.015, 0.5),
-                    new THREE.MeshStandardMaterial({ color: 0x050505 })
-                );
-                barrel.rotation.x = Math.PI/2;
-                barrel.position.z = -0.5;
-
-                // Muzzle Flash Point
-                this.muzzle = new THREE.Object3D();
-                this.muzzle.position.z = -0.8;
-                this.weaponPivot.add(this.muzzle);
-
-                this.weaponPivot.add(body, barrel);
-                this.weaponPivot.position.set(0.3, -0.25, -0.4);
-            }
-
-            initNetworking() {
-                this.socket = io(RENDER_URL);
-                this.enemies = {};
-                this.myId = null;
-
-                this.socket.on('init', (data) => {
-                    this.myId = data.id;
-                    Object.keys(data.players).forEach(id => {
-                        if (id !== this.myId) this.spawnEnemy(id);
-                    });
-                });
-
-                this.socket.on('newPlayer', (data) => this.spawnEnemy(data.id));
-                
-                this.socket.on('updatePlayer', (data) => {
-                    if (this.enemies[data.id]) {
-                        this.enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y - 1.7, data.pos.z), 0.2);
-                        this.enemies[data.id].rotation.y = data.rot.y;
-                    }
-                });
-
-                this.socket.on('playerHit', (data) => {
-                    if (data.id === this.myId) this.onDamage(data.health);
-                });
-
-                this.socket.on('playerDead', (data) => this.onKill(data));
-                
-                this.socket.on('removePlayer', (id) => {
-                    if (this.enemies[id]) {
-                        this.scene.remove(this.enemies[id]);
-                        delete this.enemies[id];
-                    }
-                });
-            }
-
-            spawnEnemy(id) {
-                const group = new THREE.Group();
-                // Capsule Body
-                const body = new THREE.Mesh(
-                    new THREE.CapsuleGeometry(0.5, 1, 4, 8),
-                    new THREE.MeshStandardMaterial({ color: 0xff4655, emissive: 0xff4655, emissiveIntensity: 0.5 })
-                );
-                body.position.y = 1;
-                group.add(body);
-                group.userData.id = id;
-                this.scene.add(group);
-                this.enemies[id] = group;
-            }
-
-            initCombat() {
-                this.raycaster = new THREE.Raycaster();
-                this.lastShot = 0;
-            }
-
-            toggleADS(active) {
-                this.player.isADS = active;
-                const targetFov = active ? 60 : 90;
-                const targetPos = active ? new THREE.Vector3(0, -0.15, -0.3) : new THREE.Vector3(0.3, -0.25, -0.4);
-                
-                // Smooth Transition (Lerp)
-                this.camera.fov = targetFov;
-                this.camera.updateProjectionMatrix();
-                this.weaponPivot.position.copy(targetPos);
-            }
-
-            shoot() {
-                if (Date.now() - this.lastShot < 100) return; // Fire Rate
-                this.lastShot = Date.now();
-
-                // Recoil
-                this.player.recoil.p += 0.04;
-                this.player.recoil.y += (Math.random() - 0.5) * 0.02;
-
-                // Muzzle Flash
-                const flash = new THREE.PointLight(0xffaa00, 5, 2);
-                flash.position.copy(this.muzzle.getWorldPosition(new THREE.Vector3()));
-                this.scene.add(flash);
-                setTimeout(() => this.scene.remove(flash), 50);
-
-                // Tracer
-                this.createTracer();
-
-                // Hit Detection
-                this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
-                const hits = this.raycaster.intersectObjects(Object.values(this.enemies), true);
-
-                if (hits.length > 0) {
-                    let obj = hits[0].object;
-                    while (obj.parent && !obj.userData.id) obj = obj.parent;
-                    if (obj.userData.id) {
-                        this.socket.emit('hit', { targetId: obj.userData.id });
-                        this.showHitmarker();
-                    }
+        // SHOOTING
+        const raycaster = new THREE.Raycaster();
+        function shoot() {
+            raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+            const intersects = raycaster.intersectObjects(Object.values(enemies), true);
+            if(intersects.length > 0) {
+                let hitObj = intersects[0].object;
+                while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
+                if(hitObj.userData && hitObj.userData.team !== myTeam) {
+                    socket.emit('hit', { targetId: hitObj.userData.id });
                 }
-            }
-
-            createTracer() {
-                const start = this.muzzle.getWorldPosition(new THREE.Vector3());
-                const end = new THREE.Vector3().set(0,0,-1).applyQuaternion(this.camera.quaternion).multiplyScalar(50).add(start);
-                const line = new THREE.Line(
-                    new THREE.BufferGeometry().setFromPoints([start, end]),
-                    new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.5 })
-                );
-                this.scene.add(line);
-                setTimeout(() => this.scene.remove(line), 40);
-            }
-
-            showHitmarker() {
-                const hm = document.getElementById('hitmarker');
-                hm.style.display = 'block';
-                setTimeout(() => hm.style.display = 'none', 100);
-            }
-
-            onDamage(hp) {
-                document.getElementById('hp-fill').style.width = hp + "%";
-                document.querySelector('.hp-text').innerText = hp;
-            }
-
-            onKill(data) {
-                const feed = document.getElementById('killfeed');
-                const div = document.createElement('div');
-                div.className = 'kill-box';
-                div.innerHTML = `${data.killer.substring(0,4)} ⚔️ ${data.victim.substring(0,4)}`;
-                feed.prepend(div);
-                setTimeout(() => div.remove(), 3000);
-
-                if (data.victim === this.myId) {
-                    this.player.pos.set(Math.random()*10, 1.7, Math.random()*10);
-                    this.onDamage(100);
-                }
-            }
-
-            handleMovement(dt) {
-                const p = this.player;
-                const move = new THREE.Vector3();
-                const speed = p.keys['ShiftLeft'] ? 0.22 : 0.12;
-
-                if (p.keys['KeyW']) move.z -= speed;
-                if (p.keys['KeyS']) move.z += speed;
-                if (p.keys['KeyA']) move.x -= speed;
-                if (p.keys['KeyD']) move.x += speed;
-
-                move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot.y));
-                
-                // Gravity & Jump
-                p.vel.y += GRAVITY * dt;
-                if (p.onGround && p.keys['Space']) {
-                    p.vel.y = 10;
-                    p.onGround = false;
-                }
-
-                p.pos.y += p.vel.y * dt;
-                p.pos.add(move);
-
-                if (p.pos.y < 1.7) {
-                    p.pos.y = 1.7;
-                    p.vel.y = 0;
-                    p.onGround = true;
-                }
-
-                // Smooth Recoil Recovery
-                p.recoil.p *= 0.9;
-                p.recoil.y *= 0.9;
-
-                this.camera.rotation.set(p.rot.p + p.recoil.p, p.rot.y + p.recoil.y, 0, 'YXZ');
-                this.camera.position.copy(p.pos);
-
-                // Sway / Bobbing
-                const sway = Math.sin(Date.now() * 0.005) * 0.005;
-                this.weaponPivot.position.y += (sway - this.weaponPivot.position.y) * 0.1;
-            }
-
-            animate() {
-                requestAnimationFrame(() => this.animate());
-                const dt = this.clock.getDelta();
-                
-                this.handleMovement(dt);
-                
-                if (this.myId) {
-                    this.socket.emit('move', { pos: this.player.pos, rot: this.player.rot });
-                }
-
-                this.fpsDisplay.innerText = `FPS: ${Math.round(1/dt)} | ID: ${this.myId || 'CONNECTING'}`;
-                this.renderer.render(this.scene, this.camera);
             }
         }
 
-        const game = new Game();
+        // LOOP & CONTROLS
+        document.addEventListener('keydown', (e) => player.keys[e.code] = true);
+        document.addEventListener('keyup', (e) => player.keys[e.code] = false);
+        document.addEventListener('mousedown', (e) => { if(e.button === 0) shoot(); });
+        document.addEventListener('mousemove', (e) => {
+            if(document.pointerLockElement) {
+                player.rot.y -= e.movementX * 0.002;
+                player.rot.p -= e.movementY * 0.002;
+                player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, player.rot.p));
+                camera.rotation.set(player.rot.p, player.rot.y, 0, 'YXZ');
+            }
+        });
 
-        // Prevent Right-Click Menu
-        window.addEventListener('contextmenu', e => e.preventDefault());
+        function animate() {
+            requestAnimationFrame(animate);
+            const move = new THREE.Vector3();
+            if(player.keys['KeyW']) move.z -= 0.15;
+            if(player.keys['KeyS']) move.z += 0.15;
+            if(player.keys['KeyA']) move.x -= 0.15;
+            if(player.keys['KeyD']) move.x += 0.15;
+            move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.rot.y));
+            player.pos.add(move);
+            camera.position.copy(player.pos);
+            
+            if(myId) socket.emit('move', { pos: player.pos, rot: player.rot });
+            renderer.render(scene, camera);
+        }
+        animate();
     </script>
 </body>
 </html>
