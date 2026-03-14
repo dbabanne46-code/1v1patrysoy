@@ -2,112 +2,107 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>1V1 PATRYSOY FPS - PRO EDITION</title>
+    <title>1V1 PRO FPS - VANDAL EDITION</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Orbitron', sans-serif; }
-        #hud { position: absolute; top: 20px; left: 20px; color: #00f2ff; pointer-events: none; text-transform: uppercase; letter-spacing: 2px; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: #00ff00; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 10px #00ff00; }
-        #health-container { position: absolute; bottom: 30px; left: 30px; width: 300px; height: 15px; background: rgba(0,0,0,0.7); border: 2px solid #333; }
-        #health-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #ff4655, #ff858d); transition: width 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
-        #hitmarker { position: absolute; top: 50%; left: 50%; color: white; font-size: 24px; font-weight: bold; transform: translate(-50%, -50%); display: none; pointer-events: none; }
-        #killfeed { position: absolute; top: 20px; right: 20px; color: #ff4655; text-align: right; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial Black', sans-serif; }
+        #hud { position: absolute; top: 20px; left: 20px; color: #00f2ff; pointer-events: none; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid #0f0; transform: translate(-50%, -50%); border-radius: 50%; }
+        #health-ui { position: absolute; bottom: 30px; left: 30px; width: 250px; height: 25px; background: rgba(0,0,0,0.8); border: 2px solid #fff; }
+        #health-bar { width: 100%; height: 100%; background: #ff4655; transition: 0.2s; }
+        #hit-effect { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 10px solid red; display: none; pointer-events: none; box-sizing: border-box; }
+        #kill-msg { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); color: #ff4655; font-size: 32px; display: none; }
     </style>
 </head>
 <body>
     <div id="hud">
-        <div id="status">SİSTEM ÇEVRİMİÇİ</div>
-        <div id="ping">ID: BEKLENİYOR...</div>
+        <div id="ping">BAĞLANIYOR...</div>
+        <div id="status">DURUM: AKTİF</div>
     </div>
-    <div id="killfeed"></div>
     <div id="crosshair"></div>
-    <div id="hitmarker">╳</div>
-    <div id="health-container"><div id="health-bar"></div></div>
+    <div id="hit-effect"></div>
+    <div id="kill-msg">DÜŞMAN ETKİSİZ HALE GETİRİLDİ</div>
+    <div id="health-ui"><div id="health-bar"></div></div>
 
     <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
 
     <script type="module">
         import * as THREE from 'three';
 
+        // RENDER LİNKİNİ BURAYA DİREKT GÖMDÜM
         const socket = io('https://onev1patrysoy.onrender.com');
-        let myId, health = 100, weaponGroup;
+        let myId, health = 100, weapon;
         let enemies = {};
 
-        // --- SAHNE VE AYDINLATMA ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0f);
-        scene.fog = new THREE.Fog(0x0a0a0f, 10, 50);
-
+        scene.background = new THREE.Color(0x050510);
+        
+        // Kamera: 'Near' değerini 0.01 yaptım ki silah burnumuzun dibinde gözüksün
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Güçlü Işıklandırma
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); 
-        scene.add(ambientLight);
+        // --- IŞIKLANDIRMA (MAX SEVİYE) ---
+        const ambient = new THREE.AmbientLight(0xffffff, 2.0); // Ortamı bembeyaz yapar
+        scene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xffffff, 2.5); // Güneş etkisi
+        sun.position.set(5, 15, 5);
+        scene.add(sun);
 
-        const hemiLight = new THREE.HemisphereLight(0x00f2ff, 0xff4655, 0.6);
-        scene.add(hemiLight);
-
-        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        sunLight.position.set(10, 20, 10);
-        scene.add(sunLight);
-
-        // Zemin ve Ortam
-        const grid = new THREE.GridHelper(100, 40, 0x00f2ff, 0x222222);
+        // Zemin: Parlak ve Izgaralı
+        const grid = new THREE.GridHelper(100, 50, 0x00f2ff, 0x444444);
         scene.add(grid);
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1 }));
-        floor.rotation.x = -Math.PI / 2;
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        floor.rotation.x = -Math.PI/2;
         scene.add(floor);
 
-        // --- SİLAH MODELİ (VANDAL) ---
-        function createWeapon() {
-            weaponGroup = new THREE.Group();
+        // --- SİLAH (VANDAL) TASARIMI ---
+        function buildVandal() {
+            weapon = new THREE.Group();
             
-            // Gövde
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.6), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-            weaponGroup.add(body);
+            // Kasa (Gövde)
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }));
+            weapon.add(body);
 
-            // Namlu
-            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5), new THREE.MeshStandardMaterial({ color: 0x050505 }));
-            barrel.rotation.x = Math.PI / 2;
-            barrel.position.z = -0.5;
-            weaponGroup.add(barrel);
+            // Namlu (Uzun)
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4), new THREE.MeshStandardMaterial({ color: 0x000000 }));
+            barrel.rotation.x = Math.PI/2;
+            barrel.position.z = -0.4;
+            weapon.add(barrel);
 
             // Şarjör
-            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.15), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.12), new THREE.MeshStandardMaterial({ color: 0x111111 }));
             mag.position.set(0, -0.15, -0.1);
-            mag.rotation.x = 0.2;
-            weaponGroup.add(mag);
+            mag.rotation.x = 0.3;
+            weapon.add(mag);
 
-            weaponGroup.position.set(0.3, -0.25, -0.4);
-            camera.add(weaponGroup);
+            // Nişangah (Parlak Detay)
+            const sight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, 0.05), new THREE.MeshStandardMaterial({ color: 0x00f2ff, emissive: 0x00f2ff }));
+            sight.position.set(0, 0.08, -0.2);
+            weapon.add(sight);
+
+            // Silahı Kameraya Bağla
+            weapon.position.set(0.25, -0.2, -0.35); // Kameranın tam önü
+            camera.add(weapon);
             scene.add(camera);
         }
-        createWeapon();
+        buildVandal();
 
-        // --- OYUNCU VE DÜŞMAN ---
-        const player = { pos: new THREE.Vector3(0, 1.7, 5), rot: { y: 0, p: 0 }, keys: {}, recoil: 0 };
+        // --- MULTIPLAYER ---
+        const player = { pos: new THREE.Vector3(0, 1.7, 5), rot: { y: 0, p: 0 }, keys: {}, recoilY: 0, recoilZ: 0 };
 
         function createEnemy(id) {
-            const group = new THREE.Group();
-            // Gövde (Neon Kırmızı)
-            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: 0xff4655, emissive: 0xff0000, emissiveIntensity: 0.5 }));
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: 0xff4655, emissive: 0xff0000 }));
             body.position.y = 1;
-            group.add(body);
-            // Kafa
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-            head.position.y = 1.8;
-            group.add(head);
-
-            group.userData.id = id;
-            scene.add(group);
-            enemies[id] = group;
+            g.add(body);
+            g.userData.id = id;
+            scene.add(g);
+            enemies[id] = g;
         }
 
-        // --- NETWORK ---
         socket.on('init', (data) => {
             myId = data.id;
             document.getElementById('ping').innerText = "ID: " + myId;
@@ -127,91 +122,84 @@
             if (data.id === myId) {
                 health = data.health;
                 document.getElementById('health-bar').style.width = health + "%";
+                document.getElementById('hit-effect').style.display = 'block';
+                setTimeout(() => document.getElementById('hit-effect').style.display = 'none', 100);
             }
         });
 
         socket.on('playerDead', (data) => {
-            const feed = document.getElementById('killfeed');
-            feed.innerHTML = `<div>${data.killer} <span style="color:white">🔫</span> ${data.victim}</div>` + feed.innerHTML;
             if (data.victim === myId) {
                 health = 100;
                 document.getElementById('health-bar').style.width = "100%";
                 player.pos.set(Math.random()*20-10, 1.7, Math.random()*20-10);
+            } else if (data.killer === myId) {
+                const msg = document.getElementById('kill-msg');
+                msg.style.display = 'block';
+                setTimeout(() => msg.style.display = 'none', 2000);
             }
         });
 
-        socket.on('removePlayer', (id) => {
-            if (enemies[id]) { scene.remove(enemies[id]); delete enemies[id]; }
-        });
-
-        // --- MEKANİKLER ---
+        // --- RECOIL & ATEŞ ---
         const raycaster = new THREE.Raycaster();
         function shoot() {
-            // Görsel Recoil (Silahın Tepmesi)
-            player.recoil = 0.1;
+            // Sert Recoil (Hem kamera hem silah kalkar)
+            player.recoilY += 0.05; // Kamera yukarı seker
+            player.recoilZ = 0.1;   // Silah geriye seker
 
             raycaster.setFromCamera({ x: 0, y: 0 }, camera);
             const intersects = raycaster.intersectObjects(Object.values(enemies), true);
-
             if (intersects.length > 0) {
-                let hitObj = intersects[0].object;
-                while (hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
-                if (hitObj.userData.id) {
-                    socket.emit('hit', { targetId: hitObj.userData.id });
-                    const hm = document.getElementById('hitmarker');
-                    hm.style.display = 'block';
-                    setTimeout(() => hm.style.display = 'none', 100);
-                }
+                let obj = intersects[0].object;
+                while (obj.parent && !obj.userData.id) obj = obj.parent;
+                if (obj.userData.id) socket.emit('hit', { targetId: obj.userData.id });
             }
         }
 
         // --- KONTROLLER ---
-        document.addEventListener('keydown', (e) => player.keys[e.code] = true);
-        document.addEventListener('keyup', (e) => player.keys[e.code] = false);
         document.addEventListener('mousedown', () => {
             if (document.pointerLockElement !== document.body) document.body.requestPointerLock();
             else shoot();
         });
+
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.body) {
                 player.rot.y -= e.movementX * 0.002;
                 player.rot.p -= e.movementY * 0.002;
                 player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, player.rot.p));
-                camera.rotation.set(player.rot.p, player.rot.y, 0, 'YXZ');
             }
         });
+        document.addEventListener('keydown', (e) => player.keys[e.code] = true);
+        document.addEventListener('keyup', (e) => player.keys[e.code] = false);
 
         // --- OYUN DÖNGÜSÜ ---
         function animate() {
             requestAnimationFrame(animate);
 
+            // Recoil Sönümleme (Yavaşça eski haline dönme)
+            player.recoilY *= 0.9;
+            player.recoilZ *= 0.8;
+            
+            // Kamerayı güncelle (Normal bakış + recoil)
+            camera.rotation.set(player.rot.p + player.recoilY, player.rot.y, 0, 'YXZ');
+
+            // Silah Pozisyonu (Nefes alma + Recoil sekişi)
+            weapon.position.z = -0.35 + player.recoilZ;
+            weapon.position.y = -0.2 + Math.sin(Date.now() * 0.004) * 0.003;
+
             // Hareket
             const move = new THREE.Vector3();
-            const speed = player.keys['ShiftLeft'] ? 0.18 : 0.11;
-            if (player.keys['KeyW']) move.z -= speed;
-            if (player.keys['KeyS']) move.z += speed;
-            if (player.keys['KeyA']) move.x -= speed;
-            if (player.keys['KeyD']) move.x += speed;
+            if (player.keys['KeyW']) move.z -= 0.12;
+            if (player.keys['KeyS']) move.z += 0.12;
+            if (player.keys['KeyA']) move.x -= 0.12;
+            if (player.keys['KeyD']) move.x += 0.12;
             move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.rot.y));
             player.pos.add(move);
             camera.position.copy(player.pos);
 
-            // Silah Animasyonu (Nefes alma ve Recoil)
-            player.recoil *= 0.9; // Tepmeyi sıfırla
-            weaponGroup.position.z = -0.4 + player.recoil;
-            weaponGroup.position.y = -0.25 + Math.sin(Date.now() * 0.003) * 0.005; // Nefes alma efekti
-
             if (myId) socket.emit('move', { pos: player.pos, rot: player.rot });
-            
             renderer.render(scene, camera);
         }
         animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
