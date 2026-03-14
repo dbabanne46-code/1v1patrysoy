@@ -3,107 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <title>1V1 PATRYSOY FPS</title>
-    <!-- Socket.io Kütüphanesi -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; }
-        canvas { display: block; }
-        
-        /* Arayüz (HUD) */
-        #hud {
-            position: absolute; top: 10px; left: 10px;
-            color: white; pointer-events: none;
-            text-shadow: 1px 1px 2px black;
-        }
-        
-        /* Crosshair (Nişangah) */
-        #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 12px; height: 12px;
-            border: 2px solid #0f0;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-        }
+        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
+        #hud { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid #0f0; transform: translate(-50%, -50%); border-radius: 50%; }
+        #health-bar-container { position: absolute; bottom: 20px; left: 20px; width: 200px; height: 20px; background: rgba(0,0,0,0.5); border: 2px solid white; }
+        #health-bar { width: 100%; height: 100%; background: #ff4655; transition: width 0.2s; }
+        #hitmarker { position: absolute; top: 50%; left: 50%; color: white; font-weight: bold; transform: translate(-50%, -50%); display: none; }
     </style>
 </head>
 <body>
-
     <div id="hud">
-        <div id="status">Sunucuya bağlanılıyor...</div>
-        <div id="ping">Bağlandıktan sonra ID burada görünecek</div>
+        <div id="status">Bağlanılıyor...</div>
+        <div id="killfeed"></div>
     </div>
     <div id="crosshair"></div>
+    <div id="hitmarker">X</div>
+    <div id="health-bar-container"><div id="health-bar"></div></div>
 
-    <!-- Three.js Import -->
-    <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-    </script>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        // --- ÖNEMLİ: RENDER LİNKİNİ BURAYA YAZ ---
-        const RENDER_URL = 'https://onev1patrysoy.onrender.com'; 
-        const socket = io(RENDER_URL);
-
-        let myId = null;
+        // RENDER LİNKİN
+        const socket = io('https://onev1patrysoy.onrender.com');
+        let myId, health = 100;
         let enemies = {};
 
-        // --- SAHNE KURULUMU ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111122); // Koyu lacivert gökyüzü
-
+        scene.background = new THREE.Color(0x0a0a12);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // --- IŞIKLANDIRMA (Siyah ekranı bu çözer) ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Her yeri aydınlatır
-        scene.add(ambientLight);
-
-        const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        sunLight.position.set(5, 10, 5);
-        scene.add(sunLight);
-
-        // --- YER VE IZGARA ---
-        const grid = new THREE.GridHelper(200, 50, 0xffffff, 0x444444);
-        scene.add(grid);
-
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(200, 200),
-            new THREE.MeshStandardMaterial({ color: 0x222222 })
-        );
-        floor.rotation.x = -Math.PI / 2;
+        // Işıklar ve Zemin
+        scene.add(new THREE.AmbientLight(0xffffff, 1));
+        scene.add(new THREE.GridHelper(100, 20, 0x444444, 0x222222));
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        floor.rotation.x = -Math.PI/2;
         scene.add(floor);
 
-        // --- OYUNCU AYARLARI ---
-        const player = {
-            pos: new THREE.Vector3(0, 1.7, 5),
-            rot: { y: 0, p: 0 },
-            keys: {}
-        };
-        camera.position.copy(player.pos);
+        const player = { pos: new THREE.Vector3(0, 1.7, 5), rot: { y: 0, p: 0 }, keys: {} };
 
-        // --- MULTIPLAYER MANTIĞI ---
+        // DÜŞMAN OLUŞTURMA
         function createEnemy(id) {
             const group = new THREE.Group();
-            const body = new THREE.Mesh(
-                new THREE.CapsuleGeometry(0.5, 1, 4, 8),
-                new THREE.MeshStandardMaterial({ color: 0xff4655 }) // Kırmızı düşman
-            );
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: 0xff4655 }));
             body.position.y = 1;
             group.add(body);
+            group.userData.id = id; // Raycast için ID ekle
             scene.add(group);
             enemies[id] = group;
         }
 
+        // --- NETWORK ---
         socket.on('init', (data) => {
             myId = data.id;
-            document.getElementById('status').innerText = "Bağlandı! ID: " + myId;
-            Object.keys(data.players).forEach(id => {
-                if (id !== myId) createEnemy(id);
-            });
+            document.getElementById('status').innerText = "BAĞLANDI: " + myId;
+            Object.keys(data.players).forEach(id => { if (id !== myId) createEnemy(id); });
         });
 
         socket.on('newPlayer', (data) => createEnemy(data.id));
@@ -115,17 +75,67 @@
             }
         });
 
-        socket.on('removePlayer', (id) => {
-            if (enemies[id]) {
-                scene.remove(enemies[id]);
-                delete enemies[id];
+        socket.on('playerHit', (data) => {
+            if (data.id === myId) {
+                health = data.health;
+                document.getElementById('health-bar').style.width = health + "%";
             }
         });
 
-        // --- KONTROLLER ---
+        socket.on('playerDead', (data) => {
+            if (data.victim === myId) {
+                alert("ÖLDÜN! Yeniden doğuyorsun.");
+                player.pos.set(Math.random()*10, 1.7, Math.random()*10);
+                health = 100;
+                document.getElementById('health-bar').style.width = "100%";
+            }
+            document.getElementById('killfeed').innerText = data.killer + " vurdu " + data.victim;
+        });
+
+        // --- ATEŞ ETME (RAYCASTING) ---
+        const raycaster = new THREE.Raycaster();
+        function shoot() {
+            // Muzzle flash gibi basit bir görsel efekt (konsola yazalım)
+            console.log("Ateş edildi!");
+
+            // Ekranın tam ortasından ışın gönder
+            raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+            
+            // Sadece düşman gruplarını kontrol et
+            const enemyMeshes = Object.values(enemies);
+            const intersects = raycaster.intersectObjects(enemyMeshes, true);
+
+            if (intersects.length > 0) {
+                // En yakındakini bul
+                let hitObject = intersects[0].object;
+                while (hitObject.parent && !hitObject.userData.id) {
+                    hitObject = hitObject.parent;
+                }
+                
+                const targetId = hitObject.userData.id;
+                if (targetId) {
+                    socket.emit('hit', { targetId: targetId });
+                    showHitmarker();
+                }
+            }
+        }
+
+        function showHitmarker() {
+            const hm = document.getElementById('hitmarker');
+            hm.style.display = 'block';
+            setTimeout(() => hm.style.display = 'none', 100);
+        }
+
+        // Kontroller
         document.addEventListener('keydown', (e) => player.keys[e.code] = true);
         document.addEventListener('keyup', (e) => player.keys[e.code] = false);
-        
+        document.addEventListener('mousedown', () => {
+            if (document.pointerLockElement !== document.body) {
+                document.body.requestPointerLock();
+            } else {
+                shoot();
+            }
+        });
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.body) {
                 player.rot.y -= e.movementX * 0.002;
@@ -135,49 +145,21 @@
             }
         });
 
-        document.addEventListener('mousedown', () => {
-            if (document.pointerLockElement !== document.body) {
-                document.body.requestPointerLock();
-            } else {
-                // Ateş etme efekti/sesi buraya gelebilir
-                socket.emit('shoot', {});
-            }
-        });
-
-        // --- OYUN DÖNGÜSÜ ---
         function animate() {
             requestAnimationFrame(animate);
-
             const move = new THREE.Vector3();
-            if (player.keys['KeyW']) move.z -= 0.12;
-            if (player.keys['KeyS']) move.z += 0.12;
-            if (player.keys['KeyA']) move.x -= 0.12;
-            if (player.keys['KeyD']) move.x += 0.12;
-
+            if (player.keys['KeyW']) move.z -= 0.1;
+            if (player.keys['KeyS']) move.z += 0.1;
+            if (player.keys['KeyA']) move.x -= 0.1;
+            if (player.keys['KeyD']) move.x += 0.1;
             move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.rot.y));
             player.pos.add(move);
             camera.position.copy(player.pos);
-
-            // Pozisyonu Sunucuya Gönder
-            if (myId) {
-                socket.emit('move', {
-                    pos: { x: player.pos.x, y: player.pos.y, z: player.pos.z },
-                    rot: { y: player.rot.y, p: player.rot.p }
-                });
-            }
-
+            
+            if (myId) socket.emit('move', { pos: player.pos, rot: player.rot });
             renderer.render(scene, camera);
         }
-
         animate();
-
-        // Pencere Boyutu Değişirse
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
     </script>
 </body>
 </html>
