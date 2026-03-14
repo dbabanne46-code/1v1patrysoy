@@ -6,15 +6,18 @@ const io = require('socket.io')(http, { cors: { origin: "*" } });
 let players = {};
 
 io.on('connection', (socket) => {
-    // Yeni oyuncu canı 100 ile başlar
-    players[socket.id] = {
-        pos: { x: 0, y: 1.7, z: 5 },
-        rot: { y: 0, p: 0 },
-        health: 100
-    };
-
-    socket.emit('init', { id: socket.id, players });
-    socket.broadcast.emit('newPlayer', { id: socket.id, player: players[socket.id] });
+    socket.on('join', (data) => {
+        players[socket.id] = {
+            id: socket.id,
+            name: data.name || "Oyuncu",
+            team: data.team || "A",
+            pos: { x: 0, y: 1.7, z: 0 },
+            rot: { y: 0, p: 0 },
+            health: 100
+        };
+        socket.emit('init', { id: socket.id, players });
+        socket.broadcast.emit('newPlayer', { id: socket.id, player: players[socket.id] });
+    });
 
     socket.on('move', (data) => {
         if (players[socket.id]) {
@@ -24,15 +27,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // VURULMA MANTIĞI
     socket.on('hit', (data) => {
         const targetId = data.targetId;
-        if (players[targetId]) {
-            players[targetId].health -= 20; // Her vuruş 20 hasar
-            
+        if (players[targetId] && players[targetId].team !== players[socket.id].team) {
+            players[targetId].health -= 25;
             if (players[targetId].health <= 0) {
-                players[targetId].health = 100; // Ölen kişi canı yenilenip doğar
-                io.emit('playerDead', { victim: targetId, killer: socket.id });
+                players[targetId].health = 100;
+                io.emit('playerDead', { victim: targetId, killer: socket.id, victimTeam: players[targetId].team });
             } else {
                 io.emit('playerHit', { id: targetId, health: players[targetId].health });
             }
