@@ -2,77 +2,90 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>ASCENT-LITE // TEAM TACTICS</title>
+    <title>ASCENT-LITE // ULTIMATE COMPETITIVE</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        :root { --vandal: #ff4655; --accent: #00f2ff; --blue: #0088ff; }
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Rajdhani', sans-serif; color: white; }
+        :root { --vandal: #ff4655; --accent: #00f2ff; --blue: #0088ff; --glass: rgba(15, 20, 25, 0.9); }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Rajdhani', sans-serif; color: white; user-select: none; }
         
-        /* FULLSCREEN MENU */
-        #overlay {
-            position: fixed; inset: 0; background: rgba(10, 15, 20, 0.95);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 1000; backdrop-filter: blur(10px);
+        /* MODERN MENU */
+        #menu {
+            position: fixed; inset: 0; background: radial-gradient(circle at center, #1a2026 0%, #050a10 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000;
         }
-        .menu-card {
-            background: rgba(255,255,255,0.05); padding: 40px; border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.1); width: 400px; text-align: center;
-        }
-        input {
-            width: 100%; padding: 12px; background: #1a2026; border: 1px solid var(--accent);
-            color: white; font-family: 'Orbitron'; margin-bottom: 20px; box-sizing: border-box;
-        }
-        .team-btns { display: flex; gap: 10px; margin-bottom: 20px; }
-        .t-btn { 
-            flex: 1; padding: 15px; border: none; cursor: pointer; font-weight: bold; 
-            font-family: 'Orbitron'; transition: 0.3s;
-        }
-        .btn-a { background: var(--vandal); color: white; }
-        .btn-b { background: var(--blue); color: white; }
-        .t-btn:hover { filter: brightness(1.2); transform: scale(1.05); }
+        .menu-box { background: var(--glass); padding: 50px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); width: 450px; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        h1 { font-family: 'Orbitron'; letter-spacing: 5px; color: var(--accent); margin-bottom: 40px; }
+        input { width: 100%; padding: 15px; background: #0a0f14; border: 1px solid var(--accent); color: white; font-family: 'Orbitron'; font-size: 16px; margin-bottom: 25px; box-sizing: border-box; text-align: center; }
+        .team-select { display: flex; gap: 15px; margin-bottom: 20px; }
+        .team-btn { flex: 1; padding: 20px; border: none; cursor: pointer; font-family: 'Orbitron'; font-weight: bold; font-size: 14px; transition: 0.3s; clip-path: polygon(10% 0, 100% 0, 90% 100%, 0 100%); }
+        .red-btn { background: var(--vandal); color: white; }
+        .blue-btn { background: var(--blue); color: white; }
+        .team-btn:hover { filter: brightness(1.2); transform: scale(1.05); }
 
-        /* HUD */
+        /* HUD ELEMENTS */
         #hud { position: absolute; inset: 0; pointer-events: none; display: none; }
-        .score-bar { 
-            position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.8); display: flex; gap: 30px; padding: 10px 40px;
-            border-bottom: 3px solid var(--accent); font-family: 'Orbitron'; font-size: 24px;
-        }
-        .hp-box { position: absolute; bottom: 40px; left: 40px; width: 300px; }
-        #hp-bar { height: 10px; background: var(--accent); transition: 0.3s; }
+        .scoreboard { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: var(--glass); display: flex; align-items: center; gap: 40px; padding: 10px 60px; border-bottom: 3px solid var(--accent); font-family: 'Orbitron'; font-size: 28px; clip-path: polygon(0 0, 100% 0, 85% 100%, 15% 100%); }
+        .hp-hud { position: absolute; bottom: 50px; left: 50px; width: 350px; }
+        .hp-text { font-size: 42px; font-weight: 800; text-shadow: 0 0 10px rgba(0,242,255,0.5); }
+        .hp-bar-outer { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); margin-top: 5px; }
+        #hp-bar-inner { width: 100%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--blue)); transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         
-        /* KILLFEED & NAMEPLATES */
-        #killfeed { position: absolute; top: 100px; right: 20px; text-align: right; }
-        .kill-entry { background: var(--vandal); padding: 5px 15px; margin-bottom: 5px; font-weight: bold; }
-        .nameplate { position: absolute; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+        .ammo-hud { position: absolute; bottom: 50px; right: 50px; text-align: right; border-right: 5px solid var(--vandal); padding-right: 20px; }
+        .ammo-count { font-size: 56px; font-weight: 800; color: white; line-height: 1; }
+
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 24px; height: 24px; pointer-events: none; }
+        .ch-part { position: absolute; background: #0f0; box-shadow: 0 0 5px #0f0; }
+        
+        #killfeed { position: absolute; top: 100px; right: 30px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+        .kill-msg { background: var(--glass); padding: 10px 20px; border-left: 4px solid var(--vandal); font-weight: bold; animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        #hit-vignette { position: fixed; inset: 0; border: 15px solid rgba(255, 70, 85, 0); transition: border 0.2s; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <!-- GİRİŞ MENÜSÜ -->
-    <div id="overlay">
-        <h1 style="font-family: 'Orbitron'; color: var(--accent); margin-bottom: 40px;">ASCENT // COMPETITIVE</h1>
-        <div class="menu-card">
-            <input type="text" id="nickInput" placeholder="NICKNAME GIRINIZ..." maxlength="12">
-            <div style="margin-bottom: 10px; font-weight: bold; color: #aaa;">TAKIM SEÇ</div>
-            <div class="team-btns">
-                <button class="t-btn btn-a" onclick="joinGame('A')">TEAM RED</button>
-                <button class="t-btn btn-b" onclick="joinGame('B')">TEAM BLUE</button>
+    <div id="hit-vignette"></div>
+
+    <!-- MAIN MENU -->
+    <div id="menu">
+        <h1>ASCENT-LITE</h1>
+        <div class="menu-box">
+            <input type="text" id="nameInput" placeholder="NICKNAME..." maxlength="12">
+            <div class="team-select">
+                <button class="team-btn red-btn" onclick="startGame('RED')">TEAM RED</button>
+                <button class="team-btn blue-btn" onclick="startGame('BLUE')">TEAM BLUE</button>
             </div>
-            <p style="font-size: 12px; color: #666;">W-A-S-D: Hareket | Mouse: Ateş | Sağ Tık: Zoom</p>
+            <p style="color: #666; font-size: 13px; margin-top: 20px;">WASD: HAREKET | MOUSE: ATEŞ | SHIFT: YAVAŞ YÜRÜ | SPACE: ZIPLA</p>
         </div>
     </div>
 
+    <!-- HUD -->
     <div id="hud">
-        <div class="score-bar">
-            <span style="color: var(--vandal)">RED: <span id="scoreA">0</span></span>
-            <span style="color: var(--blue)">BLUE: <span id="scoreB">0</span></span>
+        <div class="scoreboard">
+            <span style="color: var(--vandal)" id="scoreRed">0</span>
+            <span style="color: #444">|</span>
+            <span style="color: var(--blue)" id="scoreBlue">0</span>
         </div>
+
         <div id="killfeed"></div>
-        <div class="hp-box">
-            <div id="hp-text" style="font-size: 32px; font-weight: bold; margin-bottom: 5px;">100</div>
-            <div style="background: rgba(255,255,255,0.1);"><div id="hp-bar"></div></div>
+
+        <div id="crosshair">
+            <div class="ch-part" style="width: 2px; height: 10px; left: 11px; top: 0;"></div>
+            <div class="ch-part" style="width: 2px; height: 10px; left: 11px; bottom: 0;"></div>
+            <div class="ch-part" style="width: 10px; height: 2px; left: 0; top: 11px;"></div>
+            <div class="ch-part" style="width: 10px; height: 2px; right: 0; top: 11px;"></div>
+        </div>
+
+        <div class="hp-hud">
+            <div class="hp-text" id="hpText">100</div>
+            <div class="hp-bar-outer"><div id="hp-bar-inner"></div></div>
+        </div>
+
+        <div class="ammo-hud">
+            <div style="font-size: 14px; color: var(--vandal); letter-spacing: 2px;">VANDAL // AR</div>
+            <div class="ammo-count">25<span style="font-size: 24px; color: #444;">/75</span></div>
         </div>
     </div>
 
@@ -81,171 +94,235 @@
     <script type="module">
         import * as THREE from 'three';
 
+        // --- KONFİGÜRASYON ---
         const RENDER_URL = 'https://onev1patrysoy.onrender.com';
+        const SPAWN_RED = { x: 25, z: 25 };
+        const SPAWN_BLUE = { x: -25, z: -25 };
         const socket = io(RENDER_URL);
 
-        let myId, myTeam, myName;
-        let enemies = {};
-        let score = { A: 0, B: 0 };
-
-        // THREE.JS CORE
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050a10);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        // LIGHTS
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const sun = new THREE.DirectionalLight(0xffffff, 1);
-        sun.position.set(5, 10, 5);
-        scene.add(sun);
-
-        // LEVEL
-        scene.add(new THREE.GridHelper(100, 50, 0x444444, 0x222222));
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
-
-        // MAP OBJECTS
-        const boxGeo = new THREE.BoxGeometry(2, 2, 2);
-        for(let i=0; i<10; i++) {
-            const box = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0x333333 }));
-            box.position.set(Math.random()*40-20, 1, Math.random()*40-20);
-            scene.add(box);
-        }
-
-        const player = { pos: new THREE.Vector3(), rot: {y:0, p:0}, keys: {}, health: 100 };
-
-        // SPAWN POINTS
-        const SP_TEAM_A = { x: 30, z: 30 };
-        const SP_TEAM_B = { x: -30, z: -30 };
-
-        window.joinGame = (team) => {
-            myName = document.getElementById('nickInput').value || "Oyuncu";
-            myTeam = team;
-            document.getElementById('overlay').style.display = 'none';
-            document.getElementById('hud').style.display = 'block';
-            
-            // Initial Spawn
-            const startPos = team === 'A' ? SP_TEAM_A : SP_TEAM_B;
-            player.pos.set(startPos.x, 1.7, startPos.z);
-            
-            socket.emit('join', { name: myName, team: myTeam });
-            requestPointerLock();
-        };
-
-        function requestPointerLock() {
-            document.body.requestPointerLock();
-        }
-
-        function createEnemy(data) {
-            const group = new THREE.Group();
-            const color = data.team === 'A' ? 0xff4655 : 0x0088ff;
-            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: color }));
-            body.position.y = 1;
-            group.add(body);
-            
-            // Nameplate (Basit Text Çözümü)
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.font = '20px Orbitron';
-            ctx.fillText(data.name, 10, 30);
-            const tex = new THREE.CanvasTexture(canvas);
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-            sprite.position.y = 2.2;
-            sprite.scale.set(2, 1, 1);
-            group.add(sprite);
-
-            group.userData = { id: data.id, team: data.team };
-            scene.add(group);
-            enemies[data.id] = group;
-        }
-
-        // SOCKET LOGIC
-        socket.on('init', (data) => {
-            myId = data.id;
-            Object.keys(data.players).forEach(id => {
-                if(id !== myId) createEnemy(data.players[id]);
-            });
-        });
-
-        socket.on('newPlayer', (data) => createEnemy(data.player));
-
-        socket.on('updatePlayer', (data) => {
-            if(enemies[data.id]) {
-                enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y-1.7, data.pos.z), 0.2);
-                enemies[data.id].rotation.y = data.rot.y;
+        class AscentEngine {
+            constructor() {
+                this.initGraphics();
+                this.initLevel();
+                this.initSystems();
+                this.enemies = {};
+                this.myId = null;
+                this.myTeam = null;
+                this.isLive = false;
             }
-        });
 
-        socket.on('playerDead', (data) => {
-            // Killfeed
-            const kf = document.getElementById('killfeed');
-            kf.innerHTML = `<div class="kill-entry">${data.killer.substring(0,4)} ⚔️ ${data.victim.substring(0,4)}</div>` + kf.innerHTML;
-            
-            // Score Update
-            if(data.victimTeam === 'A') score.B++; else score.A++;
-            document.getElementById('scoreA').innerText = score.A;
-            document.getElementById('scoreB').innerText = score.B;
+            initGraphics() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x0a0f14);
+                this.scene.fog = new THREE.Fog(0x0a0f14, 10, 60);
 
-            if(data.victim === myId) {
-                const respawn = myTeam === 'A' ? SP_TEAM_A : SP_TEAM_B;
-                player.pos.set(respawn.x, 1.7, respawn.z);
-                player.health = 100;
-                updateHealthUI();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                document.body.appendChild(this.renderer.domElement);
+
+                this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+                const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+                sun.position.set(10, 20, 10);
+                this.scene.add(sun);
             }
-        });
 
-        function updateHealthUI() {
-            document.getElementById('hp-text').innerText = player.health;
-            document.getElementById('hp-bar').style.width = player.health + "%";
-        }
+            initLevel() {
+                // Zemin
+                const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x11161b }));
+                floor.rotation.x = -Math.PI / 2;
+                this.scene.add(floor);
+                this.scene.add(new THREE.GridHelper(100, 50, 0x222222, 0x111111));
 
-        // SHOOTING
-        const raycaster = new THREE.Raycaster();
-        function shoot() {
-            raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-            const intersects = raycaster.intersectObjects(Object.values(enemies), true);
-            if(intersects.length > 0) {
-                let hitObj = intersects[0].object;
-                while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
-                if(hitObj.userData && hitObj.userData.team !== myTeam) {
-                    socket.emit('hit', { targetId: hitObj.userData.id });
+                // Siperler (Kutular)
+                const boxGeo = new THREE.BoxGeometry(2.5, 2.5, 2.5);
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0x2a3036 });
+                for(let i=0; i<15; i++) {
+                    const b = new THREE.Mesh(boxGeo, boxMat);
+                    b.position.set(Math.random()*60-30, 1.25, Math.random()*60-30);
+                    this.scene.add(b);
                 }
             }
+
+            initSystems() {
+                this.player = {
+                    pos: new THREE.Vector3(), vel: new THREE.Vector3(),
+                    rot: { y: 0, p: 0 }, keys: {}, health: 100,
+                    recoil: 0, lastShot: 0
+                };
+                this.clock = new THREE.Clock();
+                this.raycaster = new THREE.Raycaster();
+                this.buildVandal();
+                this.setupNetworking();
+                window.addEventListener('resize', () => this.onResize());
+            }
+
+            buildVandal() {
+                this.weapon = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4), new THREE.MeshStandardMaterial({ color: 0x000000 }));
+                barrel.rotation.x = Math.PI/2; barrel.position.z = -0.4;
+                this.weapon.add(body, barrel);
+                this.weapon.position.set(0.3, -0.25, -0.4);
+                this.camera.add(this.weapon);
+                this.scene.add(this.camera);
+            }
+
+            setupNetworking() {
+                socket.on('init', (data) => {
+                    this.myId = data.id;
+                    Object.keys(data.players).forEach(id => { if(id !== this.myId) this.spawnEnemy(data.players[id]); });
+                    document.getElementById('scoreRed').innerText = data.scores.RED;
+                    document.getElementById('scoreBlue').innerText = data.scores.BLUE;
+                });
+                socket.on('newPlayer', (data) => this.spawnEnemy(data.player));
+                socket.on('updatePlayer', (data) => {
+                    if(this.enemies[data.id]) {
+                        this.enemies[data.id].position.lerp(new THREE.Vector3(data.pos.x, data.pos.y-1.7, data.pos.z), 0.2);
+                        this.enemies[data.id].rotation.y = data.rot.y;
+                    }
+                });
+                socket.on('playerHit', (data) => {
+                    if(data.id === this.myId) this.onDamage(data.health);
+                });
+                socket.on('playerDead', (data) => this.onDeath(data));
+                socket.on('removePlayer', (id) => {
+                    if(this.enemies[id]) { this.scene.remove(this.enemies[id]); delete this.enemies[id]; }
+                });
+            }
+
+            spawnEnemy(data) {
+                const group = new THREE.Group();
+                const color = data.team === 'RED' ? 0xff4655 : 0x0088ff;
+                const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 8), new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.3 }));
+                body.position.y = 1;
+                group.add(body);
+                
+                // Nameplate
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.font = 'bold 40px Arial';
+                ctx.fillStyle = 'white';
+                ctx.fillText(data.name, 10, 50);
+                const tex = new THREE.CanvasTexture(canvas);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+                sprite.position.y = 2.3; sprite.scale.set(1.5, 0.75, 1);
+                group.add(sprite);
+
+                group.userData = { id: data.id, team: data.team };
+                this.scene.add(group);
+                this.enemies[data.id] = group;
+            }
+
+            onDamage(hp) {
+                this.player.health = hp;
+                document.getElementById('hpText').innerText = hp;
+                document.getElementById('hp-bar-inner').style.width = hp + "%";
+                document.getElementById('hit-vignette').style.borderColor = "rgba(255,70,85,0.8)";
+                setTimeout(() => document.getElementById('hit-vignette').style.borderColor = "transparent", 200);
+            }
+
+            onDeath(data) {
+                const kf = document.getElementById('killfeed');
+                const entry = document.createElement('div');
+                entry.className = 'kill-msg';
+                entry.innerHTML = `<span style="color:#ff4655">${data.killerName}</span> ⚔️ ${data.victimName}`;
+                kf.prepend(entry);
+                setTimeout(() => entry.remove(), 4000);
+
+                document.getElementById('scoreRed').innerText = data.scores.RED;
+                document.getElementById('scoreBlue').innerText = data.scores.BLUE;
+
+                if(data.victim === this.myId) {
+                    this.player.health = 100;
+                    this.onDamage(100);
+                    const spawn = this.myTeam === 'RED' ? SPAWN_RED : SPAWN_BLUE;
+                    this.player.pos.set(spawn.x, 1.7, spawn.z);
+                }
+            }
+
+            shoot() {
+                if(Date.now() - this.player.lastShot < 100) return;
+                this.player.lastShot = Date.now();
+                this.player.recoil = 0.05;
+
+                // Tracer
+                const start = new THREE.Vector3(); this.weapon.getWorldPosition(start);
+                const end = new THREE.Vector3().set(0,0,-1).applyQuaternion(this.camera.quaternion).multiplyScalar(50).add(start);
+                const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([start, end]), new THREE.LineBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.5 }));
+                this.scene.add(line); setTimeout(() => this.scene.remove(line), 50);
+
+                // Hit Detection
+                this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+                const hits = this.raycaster.intersectObjects(Object.values(this.enemies), true);
+                if(hits.length > 0) {
+                    let obj = hits[0].object;
+                    while(obj.parent && !obj.userData.id) obj = obj.parent;
+                    if(obj.userData && obj.userData.team !== this.myTeam) socket.emit('hit', { targetId: obj.userData.id });
+                }
+            }
+
+            start(name, team) {
+                this.myTeam = team;
+                this.isLive = true;
+                const spawn = team === 'RED' ? SPAWN_RED : SPAWN_BLUE;
+                this.player.pos.set(spawn.x, 1.7, spawn.z);
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('hud').style.display = 'block';
+                document.body.requestPointerLock();
+                socket.emit('join', { name, team });
+                this.animate();
+            }
+
+            animate() {
+                if(!this.isLive) return;
+                requestAnimationFrame(() => this.animate());
+                const dt = Math.min(this.clock.getDelta(), 0.1);
+
+                // Fizik & Hareket
+                const p = this.player;
+                const move = new THREE.Vector3();
+                const speed = p.keys['ShiftLeft'] ? 0.08 : 0.16;
+                if(p.keys['KeyW']) move.z -= speed; if(p.keys['KeyS']) move.z += speed;
+                if(p.keys['KeyA']) move.x -= speed; if(p.keys['KeyD']) move.x += speed;
+                move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot.y));
+                p.pos.add(move);
+                
+                // Recoil Recovery
+                p.recoil *= 0.9;
+                this.camera.rotation.set(p.rot.p + p.recoil, p.rot.y, 0, 'YXZ');
+                this.camera.position.copy(p.pos);
+                this.weapon.position.y = -0.25 + Math.sin(Date.now()*0.005)*0.002;
+
+                if(this.myId) socket.emit('move', { pos: p.pos, rot: p.rot });
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            onResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         }
 
-        // LOOP & CONTROLS
-        document.addEventListener('keydown', (e) => player.keys[e.code] = true);
-        document.addEventListener('keyup', (e) => player.keys[e.code] = false);
-        document.addEventListener('mousedown', (e) => { if(e.button === 0) shoot(); });
+        const Engine = new AscentEngine();
+
+        window.startGame = (team) => {
+            const name = document.getElementById('nameInput').value || "Agent";
+            Engine.start(name, team);
+        };
+
         document.addEventListener('mousemove', (e) => {
             if(document.pointerLockElement) {
-                player.rot.y -= e.movementX * 0.002;
-                player.rot.p -= e.movementY * 0.002;
-                player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, player.rot.p));
-                camera.rotation.set(player.rot.p, player.rot.y, 0, 'YXZ');
+                Engine.player.rot.y -= e.movementX * 0.002;
+                Engine.player.rot.p -= e.movementY * 0.002;
+                Engine.player.rot.p = Math.max(-Math.PI/2, Math.min(Math.PI/2, Engine.player.rot.p));
             }
         });
-
-        function animate() {
-            requestAnimationFrame(animate);
-            const move = new THREE.Vector3();
-            if(player.keys['KeyW']) move.z -= 0.15;
-            if(player.keys['KeyS']) move.z += 0.15;
-            if(player.keys['KeyA']) move.x -= 0.15;
-            if(player.keys['KeyD']) move.x += 0.15;
-            move.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.rot.y));
-            player.pos.add(move);
-            camera.position.copy(player.pos);
-            
-            if(myId) socket.emit('move', { pos: player.pos, rot: player.rot });
-            renderer.render(scene, camera);
-        }
-        animate();
+        document.addEventListener('mousedown', (e) => { if(document.pointerLockElement && e.button === 0) Engine.shoot(); });
+        document.addEventListener('keydown', (e) => Engine.player.keys[e.code] = true);
+        document.addEventListener('keyup', (e) => Engine.player.keys[e.code] = false);
     </script>
 </body>
 </html>
